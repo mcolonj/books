@@ -1,0 +1,37 @@
+Login to developer.apple.com
+Go to certificates -> App IDs -> +
+Specify app name, bundle id, select push notifications, -> continue
+Register -> Done
+App is listed in App Id's
+
+Generate a certificate from keychain access
+
+Keychain access -> Certificate assistant -> request a certificate from a certificate authority
+Enter email address and save to disk -> continue
+Save it to documents
+
+Go back to developer accounts
+App Ids -> Edit
+Scroll down to 'Apple push notification service SSL certificates' 
+Development SSL Certificate
+Create an additional certificate to use for this App Id
+Production SSL Certificate
+Create an additional certificate to use for this App Id
+Click create certificate
+Click Continue
+
+Choose certificate file created from keychain access and click continue
+Download certificate to documents
+Click done
+
+
+Generate APNS .p12 certificate
+Double click development certificate, add it to keychain
+Keychain access -> login -> my certificate -> right click -> export
+Enter certificate name and click save
+Enter password click ok
+Enter admin password
+
+
+
+
