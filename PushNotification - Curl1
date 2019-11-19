@@ -1,0 +1,152 @@
+taken from https://gist.github.com/egcode/386ff9b15a1f8b63ae89b8ab6cd8c93f
+
+#!/bin/bash
+# to execute it first chmod +x push.sh
+
+deviceToken=<device token id from device did receive token>
+
+authKey="./AuthKey_<auth_key>.p8"
+authKeyId=<auth_key>
+teamId=<team id>
+bundleId=<bundle id>
+endpoint=https://api.development.push.apple.com
+
+read -r -d '' payload <<-'EOF'
+{
+"aps": {
+    "badge": 2,
+    "sound" : "default",
+    "category": "mycategory",
+    "alert": {
+        "title": "my title bla",
+        "subtitle": "my subtitle",
+        "body": "my body text message"
+    }
+},
+"custom": {
+    "mykey": "myvalue"
+    }
+}
+EOF
+
+# --------------------------------------------------------------------------
+
+base64() {
+    openssl base64 -e -A | tr -- '+/' '-_' | tr -d =
+}
+
+sign() {
+    printf "$1"| openssl dgst -binary -sha256 -sign "$authKey" | base64
+}
+
+time=$(date +%s)
+header=$(printf '{ "alg": "ES256", "kid": "%s" }' "$authKeyId" | base64)
+claims=$(printf '{ "iss": "%s", "iat": %d }' "$teamId" "$time" | base64)
+jwt="$header.$claims.$(sign $header.$claims)"
+
+curl --verbose \
+--header "content-type: application/json" \
+--header "authorization: bearer $jwt" \
+--header "apns-topic: $bundleId" \
+--data "$payload" \
+$endpoint/3/device/$deviceToken
+
+Taken from https://gist.github.com/haru-ake/656f8c752998ead580b6a7722b2d1940
+
+#!/usr/bin/env bash
+
+ENDPOINT_URL='https://api.push.apple.com/3/device'               # PROD
+# ENDPOINT_URL='https://api.development.push.apple.com/3/device' # DEV
+
+# If you want send VoIP push, you should add '.voip' to the end.
+BUNDLE_IDENTIFIER="REPLACE BUNDLE IDENTIFIER YOUR APP"
+
+CLIENT_CERT_PATH='REPLACE YOUR CERT PATH'
+CLIENT_TOKEN='REPLACE YOUR CLIENT TOKEN'
+
+URL="${ENDPOINT_URL}/${CLIENT_TOKEN}"
+PAYLOAD="{\"test\":\"test\"}"
+
+curl -v --http2 -E "${CLIENT_CERT_PATH}" --header "apns-topic: ${BUNDLE_IDENTIFIER}" -d "${PAYLOAD}" "${URL}"
+
+
+Taken from https://gist.github.com/ducntrinh/f0d9a2c2b18c771ee6aeb92710b5f95e
+
+#!/usr/bin/env bash
+# test_push_apns.sh -- Call an test push notificiation request to APNS server
+# Author: Duc N. Trinh <duc.n.trinh@gmail.com>
+
+readonly APNS_PRODUCTION_SERVER_URL='https://api.push.apple.com/3/device'
+readonly APNS_SANDBOX_SERVER_URL='https://api.sandbox.push.apple.com/3/device'
+
+readonly DEFAULT_PAYLOAD='{"aps":{"alert":{"title": "Test title","body": "Test body"},"badge":1}}'
+
+usage() {
+  cat <<HELP_USAGE
+Usage: $0 [options] cert_file token [payload]
+  -h        Display this help text    
+  -s        Use APNs sandbox server instead of production server
+  -v        Turn on verbose output
+HELP_USAGE
+}
+
+main() {
+  sandbox='false'
+  verbose=''
+  while getopts ':hsv' opt; do
+    case "${opt}" in
+      h) usage && exit 0 ;;
+      s) sandbox='true' ;;
+      v) verbose='-v' ;;
+      \?) echo "Unexpected option -$OPTARG" >&2 && exit 1;;
+    esac
+  done
+  shift $((OPTIND-1))
+
+  if [[ $# -lt 2 ]]; then
+    usage && exit 1;
+  fi
+
+  cert_file=$1
+  token=$2
+
+  if [[ -z $3 ]]; then
+    payload=$DEFAULT_PAYLOAD
+  else
+    payload=$3
+  fi
+
+  if [[ $sandbox == 'true' ]]; then
+    apns_url=$APNS_SANDBOX_SERVER_URL
+  else
+    apns_url=$APNS_PRODUCTION_SERVER_URL
+  fi 
+
+  cert_file_content=$(<$1)
+  bundle_id_regex='/UID=([A-Za-z0-0\.]+)/'
+  if [[ $cert_file_content =~ $bundle_id_regex ]]; then
+    bundle_id=${BASH_REMATCH[1]}
+  else
+    echo "Couldn't find bundle ID in cert file" && exit 1
+  fi
+
+  response=$(curl -s "$verbose" \
+    -w ",%{http_code}," \
+    -d "$payload" \
+    -H "apns-topic:$bundle_id" \
+    -H "Content-Type:application/json" \
+    --cert "$cert_file" \
+    --http2 --http2-prior-knowledge \
+    "$apns_url/$token")
+  response_code=$(echo "$response" | awk -F "," '{print $(NF-1)}')
+  response_body=$(echo "$response" | awk -F "," '{print $(NF-2)}')
+  if [[ $response_code == '200' ]]; then
+    echo 'Notification sent successfully'
+  else
+    echo 'Notification sent failed'
+    echo "Response code: $response_code"
+    echo "Response body: $response_body"
+  fi
+}
+
+main "$@"
